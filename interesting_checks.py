@@ -298,9 +298,10 @@ class RunInterestingChecks:
 		self.checks_subdirectory 	 = os.path.join(self.output_directory, self.CHECKS)
 
 		if force:
-			logging.warning('Removing directory with same name as designated output directory: %s' \
-										 % (self.output_directory))
-			shutil.rmtree(self.output_directory)
+			if os.path.isdir(self.output_directory):
+				logging.warning('Removing directory with same name as designated output directory: %s' \
+											 % (self.output_directory))
+				shutil.rmtree(self.output_directory)
 
 		# Generate output directory structure
 		os.mkdir(self.output_directory) 		# Main output directory
@@ -408,14 +409,14 @@ class RunInterestingChecks:
 		List of strings to files contianing genome or assembly bins.
 		'''
 
+		bin_list = []	
 		if bin:
-			bin_list = []		
 			for bin_file in os.listdir(bin):
 				bin_path = os.path.join(bin, bin_file)
 				bin_list.append(bin_path)
+		if fasta:
 			bin_list += fasta
-		else:
-			bin_list = fasta
+
 		return bin_list
 
 	###########################################################################
@@ -436,20 +437,20 @@ class RunInterestingChecks:
 		check_results_dict = {}
 		
 		bin_list = self._gather_bins(bin, fasta)
+		if any(bin_list):
+			for check_file in check_file_list:
+				check = Check(check_file) # Load check
 
-		for check_file in check_file_list:
-			check = Check(check_file) # Load check
+				logging.info('Running check: %s' % check.name)
+				results = self._run_check(check, bin_list)
+				check_results_dict[check.name] = results
 
-			logging.info('Running check: %s' % check.name)
-			results = self._run_check(check, bin_list)
-			check_results_dict[check.name] = results
-
-			if dont_annotate:
-				logging.info('Skipping annotation') 
-				shutil.rmtree(self.annotate_wrapper_output)
-			else:
-				logging.info('Summarising results')
-				self._summary(check, results)		
+				if dont_annotate:
+					logging.info('Skipping annotation') 
+					shutil.rmtree(self.annotate_wrapper_output)
+				else:
+					logging.info('Summarising results')
+					self._summary(check, results)		
 			
 		logging.info('Writing check results to an output YAML file: %s' % self.output_yaml)
 		self._compile_yaml( check_results_dict, self.output_yaml )
@@ -459,7 +460,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='''RunInterestingChecks = Run Interesting Checks''')
 
 	parser.add_argument('--bin', type=str, help='Directory containing genomes')
-	parser.add_argument('--fasta', type=str, nargs='+', help='Fasta file')	
+	parser.add_argument('--fasta', type=str, nargs='+', help='Fasta file', default=[])	
 	parser.add_argument('--checks', type=str, help='Checks', nargs = '+', required=True)
 	parser.add_argument('--dont_annotate', action='store_true', help='Dont run EnrichM to annotate genomes that pass the check filters')
 	parser.add_argument('--force', action='store_true', help='Overwrite previous run with the same name')
