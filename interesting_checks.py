@@ -32,6 +32,7 @@ import subprocess
 import argparse
 import yaml
 import json
+import shutil
 import os
 from string import Template
 from annotate_wrapper import AnnotateWrapper
@@ -118,7 +119,9 @@ class Check(Checks):
 		check_json = json.load(open(check_file))
 
 		for field, entry in check_json.items():
-			
+			field = str(field)
+			entry = str(entry)
+
 			if field == self.TYPE:
 				self.type = entry
 			
@@ -127,19 +130,19 @@ class Check(Checks):
 			
 			elif field == self.PARAMS:
 				self.parameter_dictionary \
-					= {parameter_field: parameter_entry for 
+					= {str(parameter_field): str(parameter_entry) for 
 					   parameter_field, parameter_entry in 
 					   check_json[field].items()}
 			
 			elif field == self.INTERPRETATION:
 				self.interpretation_dictionary \
-					= {interpretation_field: interpretation_entry for 
+					= {str(interpretation_field): str(interpretation_entry) for 
 					   interpretation_field, interpretation_entry in 
 					   check_json[field].items()}
 			
 			elif field == self.SUMMARY:
 				self.summary_dictionary \
-					= {summary_field: summary_entry for 
+					= {str(summary_field): str(summary_entry) for 
 					   summary_field, summary_entry in 
 					   check_json[field].items()}
 	
@@ -277,8 +280,16 @@ class RunInterestingChecks:
 	###########################################################################
 	###########################################################################
 
-	def __init__(self, output_directory, threads):
-
+	def __init__(self, output_directory, threads, force):
+		'''		
+		Parameters
+		----------
+		output_directory 	- String. Output directory to create
+		threads				- String. Number of threads to use for dependency 
+							  software
+		force 				- Bool. Overwrite a directory with the same name 
+							  as the specified output
+		'''
 		self.output_directory 		 = output_directory
 		self.threads 		  		 = threads
 
@@ -286,11 +297,15 @@ class RunInterestingChecks:
 		self.annotate_wrapper_output = os.path.join(self.output_directory, self.OUTPUT_ANNTOATE)
 		self.checks_subdirectory 	 = os.path.join(self.output_directory, self.CHECKS)
 
+		if force:
+			logging.warning('Removing directory with same name as designated output directory: %s' \
+										 % (self.output_directory))
+			shutil.rmtree(self.output_directory)
+
 		# Generate output directory structure
 		os.mkdir(self.output_directory) 		# Main output directory
 		os.mkdir(self.checks_subdirectory)		# Subdirectory to store the output of files of each check
 		os.mkdir(self.annotate_wrapper_output) 	# Subdirectory of enrichM annotations for files that pass checks.
-
 
 	###########################################################################
 	###########################################################################
@@ -406,7 +421,7 @@ class RunInterestingChecks:
 	###########################################################################
 	###########################################################################
 
-	def do(self, bin, fasta, check_file_list):
+	def do(self, bin, fasta, check_file_list, dont_annotate):
 		'''
 		Iterate through specified 'check files' 
 
@@ -415,6 +430,7 @@ class RunInterestingChecks:
 		bin 			- String. Path to folder containing genomes to process
 		fasta 			- List. List of paths to files containing genomes
 		check_file_list	- List. List of check files in json format.		
+		dont_annotate 	- Bool. Whether to annotate (True) or not (False)
 		'''
 		
 		check_results_dict = {}
@@ -426,12 +442,15 @@ class RunInterestingChecks:
 
 			logging.info('Running check: %s' % check.name)
 			results = self._run_check(check, bin_list)
-			
-			logging.info('Summarising results')
-			self._summary(check, results)		
-
 			check_results_dict[check.name] = results
 
+			if dont_annotate:
+				logging.info('Skipping annotation') 
+				shutil.rmtree(self.annotate_wrapper_output)
+			else:
+				logging.info('Summarising results')
+				self._summary(check, results)		
+			
 		logging.info('Writing check results to an output YAML file: %s' % self.output_yaml)
 		self._compile_yaml( check_results_dict, self.output_yaml )
 
@@ -442,6 +461,8 @@ if __name__ == '__main__':
 	parser.add_argument('--bin', type=str, help='Directory containing genomes')
 	parser.add_argument('--fasta', type=str, nargs='+', help='Fasta file')	
 	parser.add_argument('--checks', type=str, help='Checks', nargs = '+', required=True)
+	parser.add_argument('--dont_annotate', action='store_true', help='Dont run EnrichM to annotate genomes that pass the check filters')
+	parser.add_argument('--force', action='store_true', help='Overwrite previous run with the same name')
 	parser.add_argument('--output_directory', type=str, help='Output alignment', required=True)
 	parser.add_argument('--threads', help='Number of threads to use from PROKKA and EnrichM. Default = 5.', default = '5')
 	parser.add_argument('--log', help='Output logging information to file', type=str, default=False)
@@ -456,10 +477,9 @@ if __name__ == '__main__':
 	else:
 		logging.basicConfig(level=debug[args.verbosity], format='%(asctime)s %(levelname)s: %(message)s', datefmt='[%Y-%m-%d %I:%M:%S %p]')
 	
-	if os.path.isdir(args.output_directory):
-		raise Exception('File exists: %s' % args.output_directory)
-
 	check_params(args)
-	ric = RunInterestingChecks(args.output_directory, args.threads)
-	ric.do(args.bin, args.fasta, args.checks)
+
+	ric = RunInterestingChecks(args.output_directory, args.threads, args.force)
+	
+	ric.do(args.bin, args.fasta, args.checks, args.dont_annotate)
 	
