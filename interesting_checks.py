@@ -346,6 +346,14 @@ class RunInterestingChecks:
 
 		check_results = {}
 		check_subdir = os.path.join(self.checks_subdirectory, check.name)
+		counter = 1
+
+		while os.path.exists(check_subdir):
+			new_name = check_subdir + '.' + str(counter)
+			logging.warning('check file with duplicate name: %s renaming to %s' % (check.name, new_name))
+			check_subdir = new_name
+			counter += 1
+		
 		os.mkdir(check_subdir)
 
 		for bin_path in bins_list:

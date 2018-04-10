@@ -26,6 +26,7 @@ __status__ = "Development"
 __version__ = "0.0.1"
  
 ###############################################################################
+execfile('/usr/local/Modules/3.2.10/init/python.py')
 
 import logging
 import subprocess
@@ -68,6 +69,9 @@ class AnnotateWrapper:
         '''
         Call enrichM
         '''
+        module('purge')
+        module('load','enrichm')
+        module('load','R')
         cmd = 'enrichm annotate --ko --threads %s --output %s --genome_files %s' \
                     % (self.threads, self.enrichm_output, self.genome)
         subprocess.call(cmd, shell=True)
